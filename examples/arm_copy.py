@@ -8,12 +8,14 @@ The position of the right arm is read and set to the left arm.
 import rclpy
 from rclpy.node import Node
 
-from reachy_msgs.srv import SetCompliant
+from reachy_msgs.srv import SetJointCompliancy
 
 from sensor_msgs.msg import JointState
 
 
 class ArmCopy(Node):
+    """Node reponsibles for copying movements applied to the left arm on the right one."""
+
     left_arm = [
         'l_shoulder_pitch',
         'l_shoulder_roll',
@@ -36,9 +38,10 @@ class ArmCopy(Node):
     ]
 
     def __init__(self) -> None:
+        """Set up the Node and create necessary pub/sub/services."""
         super().__init__('arm_copy')
 
-        self.compliant_client = self.create_client(SetCompliant, 'set_compliant')
+        self.compliant_client = self.create_client(SetJointCompliancy, 'set_joint_compliancy')
         self.compliant_client.wait_for_service()
 
         self.clock = self.get_clock()
@@ -52,14 +55,15 @@ class ArmCopy(Node):
         self.joint_goals_publisher = self.create_publisher(JointState, 'joint_goals', 5)
         self.joint_goals = JointState()
 
-        request = SetCompliant.Request()
+        request = SetJointCompliancy.Request()
         request.name = self.left_arm
-        request.compliant = [False] * len(self.left_arm)
+        request.compliancy = [False] * len(self.left_arm)
 
         future = self.compliant_client.call_async(request)
         rclpy.spin_until_future_complete(self, future)
 
     def on_joint_states(self, joint_state: JointState):
+        """Handle message callback for the /joint_states topic."""
         joint_names = []
         joint_goals = []
 
@@ -82,11 +86,13 @@ class ArmCopy(Node):
         self.joint_goals.header.stamp = self.clock.now().to_msg()
         self.joint_goals.name = joint_names
         self.joint_goals.position = joint_goals
+        self.joint_goals.velocity = [0.0 for _ in joint_names]
 
         self.joint_goals_publisher.publish(self.joint_goals)
 
 
 def main():
+    """Run main loop."""
     rclpy.init()
 
     arm_copy = ArmCopy()

@@ -1,46 +1,48 @@
+"""Examples showing how to turn all joints compliants."""
+from typing import List
+
 import rclpy
 from rclpy.node import Node
-from sensor_msgs import msg
 
 from sensor_msgs.msg import JointState
 
-from reachy_msgs.srv import SetCompliant
+from reachy_msgs.srv import SetJointCompliancy
 
 
 class SetAllCompliant(Node):
-    motors = [
-        'l_shoulder_pitch',
-        'l_shoulder_roll',
-        'l_arm_yaw',
-        'l_elbow_pitch',
-        'l_forearm_yaw',
-        'l_wrist_pitch',
-        'l_wrist_roll',
-        'l_gripper',
-        'r_shoulder_pitch',
-        'r_shoulder_roll',
-        'r_arm_yaw',
-        'r_elbow_pitch',
-        'r_forearm_yaw',
-        'r_wrist_pitch',
-        'r_wrist_roll',
-        'r_gripper',
-    ]
+    """Node responsible for turning all joints compliant."""
 
     def __init__(self) -> None:
+        """Set up the node and connect to the set compliant service."""
         super().__init__('arm_copy')
 
-        self.compliant_client = self.create_client(SetCompliant, 'set_compliant')
+        self.compliant_client = self.create_client(SetJointCompliancy, 'set_joint_compliancy')
         self.compliant_client.wait_for_service()
 
-        request = SetCompliant.Request()
-        request.name = self.motors
-        request.compliant = [True] * len(self.motors)
+        self.joints_name = self.get_all_joints_name()
+
+        request = SetJointCompliancy.Request()
+        request.name = self.joints_name
+        request.compliancy = [True] * len(self.joints_name)
 
         self.future = self.compliant_client.call_async(request)
 
+    def get_all_joints_name(self) -> List[str]:
+        """Retrieve all joints name."""
+        def cb(msg: JointState):
+            self.joints_name = msg.name
+
+        joint_state_sub = self.create_subscription(
+            msg_type=JointState, topic='/joint_states',
+            callback=cb, qos_profile=5,
+        )
+        rclpy.spin_once(self)
+        self.destroy_subscription(joint_state_sub)
+        return self.joints_name
+
 
 def main():
+    """Run main loop."""
     rclpy.init()
 
     all_compliant = SetAllCompliant()
